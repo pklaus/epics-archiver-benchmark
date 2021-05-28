@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE engineconfig SYSTEM "engineconfig.dtd">
+<engineconfig>
+<group>
+<name>Anonymous</name>
+{% for ioc in range(25) %}{% for record in range(10000) %}<channel><name>IOC{{ioc}}:0:{{record}}:x</name><period>0.1</period><scan/></channel>
+{% endfor %}{% endfor %}
+</group>
+</engineconfig>

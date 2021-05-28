@@ -1,0 +1,125 @@
+version: "3.8"
+
+networks:
+
+  epics_field:
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.40.0.0/16"
+
+  archiver-appliance-net:
+  cassandra-pv-archiver-net:
+
+services:
+
+  archiver-appliance:
+    container_name: archiver-appliance
+    hostname: archiver-appliance
+    image: pklaus/archiver-appliance
+    ports:
+     - "17665:17665"
+    volumes:
+     - ./storage/archiver-appliance/data_0_sts:/storage/sts
+     - ./storage/archiver-appliance/data_1_mts:/storage/mts
+     - ./storage/archiver-appliance/data_2_lts:/storage/lts
+     - ./storage/archiver-appliance/logs:/storage/logs
+    stdin_open: true
+    tty: true
+    environment:
+      JAVA_OPTS: "-XX:+UseG1GC -Xms16G -Xmx16G -ea"
+      #EPICS_CA_ADDR_LIST: "127.0.0.1"
+      #EPICS_CA_AUTO_ADDR_LIST: "no"
+      ARCHAPPL_PERSISTENCE_LAYER: "org.epics.archiverappliance.config.persistence.RedisPersistence"
+      ARCHAPPL_PERSISTENCE_LAYER_REDISURL: "archiver-appliance-redis-db"
+      #ARCHAPPL_ALL_APPS_ON_ONE_JVM: 'true'
+    networks:
+      epics_field:
+      archiver-appliance-net:
+    links: 
+     - archiver-appliance-redis-db
+
+  archiver-appliance-redis-db:
+    container_name: archiver-appliance-redis-db
+    # persistence db for archiver appliance
+    image: redis
+    volumes:
+      - ./storage/archiver-appliance/redis-db-data/:/data
+    networks:
+      archiver-appliance-net:
+    command: redis-server --appendonly yes
+
+  cassandra-pv-archiver:
+    container_name: cassandra-pv-archiver
+    image: pklaus/cassandra-pv-archiver
+    hostname: cassandra-pv-archiver
+    restart: always
+    environment:
+      JAVA_OPTS: "-XX:+UseG1GC -Xms16G -Xmx16G -ea"
+    volumes:
+      - ./storage/cassandra-pv-archiver/logs:/storage/logs
+    networks:
+      - epics_field
+      - cassandra-pv-archiver-net
+    ports:
+      - 4812:4812
+      - 9812:9812
+    expose:
+      - 9813
+    depends_on:
+      - cassandra-pv-archiver-db
+    links:
+      - cassandra-pv-archiver-db
+    command: >
+      /bin/bash -c 'sed -i "s/    - cassandra$$/    - cassandra-pv-archiver-db/g"
+      /etc/cpa/cassandra-pv-archiver.yaml &&
+      ./bin/cassandra-pv-archiver-server
+      --config-file=/etc/cpa/cassandra-pv-archiver.yaml
+      --no-banner'
+
+  cassandra-pv-archiver-db:
+    image: pklaus/cassandra:3.11
+    hostname: cassandra-pv-archiver-db
+    container_name: cassandra-pv-archiver-db
+    restart: always
+    networks:
+      - cassandra-pv-archiver-net
+    volumes:
+      - ./storage/cassandra-pv-archiver/db-data:/var/lib/cassandra
+    environment:
+      - CASSANDRA_START_RPC=true
+    command: cassandra -f
+
+
+{% for i in range(1, 26) %}
+
+  massive-ioc-{{i}}:
+    #image: slominskir/softioc:latest
+    image: pklaus/epics_base:7.0.4_debian
+    restart: always
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./epics_db:/db:ro
+    environment:
+      - MAX_SLICE=9999
+    networks:
+      - epics_field
+    expose:
+      - "5064-5065/udp"
+      - "5064-5065"
+    #entrypoint: []
+    #entrypoint: /bin/sh -c
+    #entrypoint: /bin/bash -c
+    #command: 'softIoc $$(for slice in $$(seq 0 $$MAX_SLICE); do echo "-m DEVICE=IOC$$(hostname):$$slice -d /db/1000_random.db"; done)'
+    #command: '"softIoc -m DEVICE=IOC0:0 -d /db/10000_random.db"'
+    #command: '"softIoc -m DEVICE=IOC{{i}}:0 -d /db/10000_random.db"'
+    command: softIoc -m DEVICE=IOC{{i}}:0 -d /db/10000_random.db
+    #command:
+    #  - softIoc
+    #  - -m
+    #  - DEVICE=IOC0:0
+    #  - -d
+    #  - /db/10000_random.db
+
+{% endfor %}

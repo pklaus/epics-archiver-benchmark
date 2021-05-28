@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<server-configuration xmlns="http://www.aquenos.com/2016/xmlns/cassandra-pv-archiver-configuration" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.aquenos.com/2016/xmlns/cassandra-pv-archiver-configuration http://www.aquenos.com/2016/xmlns/cassandra-pv-archiver-configuration-3.0.0.xsd">
+{% for ioc in range(25) %}{% for record in range(10000) %}
+<channel name="IOC{{ioc}}:0:{{record}}:x" control-system-type="channel_access"/>{% endfor %}{% endfor %}
+</server-configuration>
